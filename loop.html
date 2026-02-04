@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 迷宮邏輯編輯器 - 複合動作版</title>
+    <style>
+        :root {
+            --bg-color: #141f35;
+            --cell-size: 18px;
+            --primary: #4a90e2;
+            --player-red: #d74e5d;
+            --goal-green: #4ac0a1;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f4f8;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            display: flex;
+            gap: 25px;
+            max-width: 1300px;
+            align-items: flex-start;
+        }
+
+        /* 迷宮樣式 */
+        #maze-grid {
+            display: grid;
+            grid-template-columns: repeat(33, var(--cell-size));
+            grid-template-rows: repeat(23, var(--cell-size));
+            background: var(--bg-color);
+            padding: 10px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .cell {
+            width: var(--cell-size);
+            height: var(--cell-size);
+            box-sizing: border-box;
+        }
+
+        .wall { background-color: var(--bg-color); }
+        .path { background-color: #ffffff; border: 0.1px solid #f0f0f0; }
+        .start { background-color: var(--player-red); }
+        .end { background-color: var(--goal-green); border-radius: 2px; box-shadow: 0 0 8px var(--goal-green); }
+        .visited { background-color: rgba(74, 192, 161, 0.1) !important; transition: background 0.5s; }
+        .marked { background-color: #fff176 !important; border: 1px solid #fbc02d; }
+
+        #player {
+            width: 100%;
+            height: 100%;
+            background: var(--player-red);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 10px;
+            font-weight: bold;
+            z-index: 10;
+        }
+
+        /* 邏輯編輯面板 */
+        .editor-panel {
+            width: 580px;
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+
+        h2 { margin-top: 0; color: #2c3e50; font-size: 22px; }
+
+        #rules-list {
+            max-height: 500px;
+            overflow-y: auto;
+            margin-bottom: 15px;
+            padding-right: 10px;
+        }
+
+        .rule-card {
+            background: #f8fbff;
+            border-left: 5px solid var(--primary);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            position: relative;
+        }
+
+        .rule-card.else { border-left-color: #95a5a6; background: #fafafa; }
+
+        .rule-label { font-weight: bold; color: var(--primary); margin-bottom: 8px; display: flex; justify-content: space-between; }
+        
+        .conditions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+        
+        .chip {
+            background: white;
+            border: 1px solid #dcdfe6;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .action-row { font-size: 14px; color: #444; }
+        
+        select {
+            padding: 5px;
+            border-radius: 4px;
+            border: 1px solid #dcdfe6;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .btn-add { background: #ebf3ff; color: var(--primary); border: 2px dashed var(--primary); width: 100%; margin-bottom: 15px; }
+        .btn-run { background: #00b894; color: white; flex: 2; }
+        .btn-stop { background: #fab1a0; color: white; flex: 1; }
+        .btn-reset { background: #636e72; color: white; flex: 1; }
+        
+        .controls-group { display: flex; gap: 10px; }
+        .del-text { color: #ff7675; cursor: pointer; font-size: 12px; }
+        
+        #status-bar {
+            margin-top: 20px;
+            padding: 12px;
+            background: #fff9db;
+            border-left: 4px solid #fcc419;
+            font-size: 14px;
+            color: #666;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div id="maze-grid"></div>
+
+        <div class="editor-panel">
+            <h2>🧩 機器人邏輯編輯器</h2>
+            
+            <div id="rules-list">
+                </div>
+
+            <button class="btn btn-add" onclick="addRule()">+ 新增 else if 規則</button>
+
+            <div class="rule-card else">
+                <div class="rule-label">else (當上方條件都不滿足時)</div>
+                <div class="action-row">
+                    執行動作：
+                    <select id="else-action">
+                        <option value="turn_around">回頭 (180°)</option>
+                        <option value="turn_left">左轉並前進</option>
+                        <option value="turn_right">右轉並前進</option>
+                        <option value="forward">前進</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="controls-group">
+                <button class="btn btn-run" onclick="startLoop()">開始自動執行 (Loop)</button>
+                <button class="btn btn-stop" onclick="stopLoop()">停止</button>
+                <button class="btn btn-reset" onclick="resetAll()">重置</button>
+            </div>
+
+            <div id="status-bar">狀態：準備就緒。提示：優先設定「左方有路」作為第一條 if 規則。</div>
+        </div>
+    </div>
+
+<script>
+    // 33x23 迷宮數據
+    const mazeMap = [
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1],
+        [1,'S',0,0,0,1,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1],
+        [1,1,0,0,0,0,0,1,0,1,0,1,1,1,0,0,0,0,0,1,0,1,0,0,1,1,0,0,0,1,0,0,1],
+        [1,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0,1,0,1],
+        [1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,0,0,0,0,1,0,1,0,1,1,0,0,1,1,1,1,1,1],
+        [1,0,0,0,0,0,1,1,0,0,0,0,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,0,0,1,0,1],
+        [1,1,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,1,1],
+        [1,0,0,1,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,1,0,0,1],
+        [1,1,0,1,0,0,1,0,1,0,0,1,1,1,1,0,0,1,0,1,0,0,0,1,1,0,0,0,1,0,0,0,1],
+        [1,0,0,1,0,1,0,0,0,1,1,0,1,0,0,0,1,0,0,1,0,0,0,1,0,0,0,1,1,0,0,1,1],
+        [1,1,1,1,0,0,0,1,0,0,1,0,1,0,1,1,0,0,1,1,0,0,0,0,0,0,1,0,1,0,0,0,1],
+        [1,0,0,0,0,1,1,1,0,0,0,0,0,0,1,0,1,1,0,0,0,0,0,0,1,0,0,1,0,0,1,0,1],
+        [1,1,0,1,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,1,0,1],
+        [1,1,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,1,1,0,0,0,0,0,1,0,1,0,0,1],
+        [1,0,0,1,0,1,0,1,0,0,1,1,0,0,0,0,1,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0,1],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,1,0,0,1,1,0,1,0,0,0,0,1],
+        [1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,1,0,0,0,0,0,1],
+        [1,1,0,1,0,1,0,1,0,0,0,0,0,0,0,0,1,0,1,0,1,0,0,1,0,0,0,0,1,1,0,0,1],
+        [1,1,1,1,1,0,0,1,0,0,0,0,1,0,0,0,1,0,1,0,1,1,0,0,1,0,1,0,0,0,1,0,1],
+        [1,1,0,1,1,1,0,0,1,0,0,0,0,1,0,0,1,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,1,0,1,1,1,1,0,0,0,1,1,0,0,1,0,1,1,0,0,0,0,0,0,'E',1],
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1]
+    ];
+
+    let player = { r: 1, c: 1, dir: 1 }; // 0:N, 1:E, 2:S, 3:W
+    let timer = null;
+
+    // 初始化渲染
+    function init() {
+        const grid = document.getElementById('maze-grid');
+        grid.innerHTML = '';
+        for(let r=0; r<23; r++){
+            for(let c=0; c<33; c++){
+                const cell = document.createElement('div');
+                cell.className = `cell ${mazeMap[r][c] === 1 ? 'wall' : 'path'}`;
+                if(mazeMap[r][c] === 'S') cell.classList.add('start');
+                if(mazeMap[r][c] === 'E') cell.classList.add('end');
+                cell.id = `pos-${r}-${c}`;
+                grid.appendChild(cell);
+            }
+        }
+        updatePlayerUI();
+    }
+
+    // 動態管理規則
+    function addRule() {
+        const list = document.getElementById('rules-list');
+        const ruleId = `r-${Date.now()}`;
+        const div = document.createElement('div');
+        div.className = 'rule-card';
+        div.id = ruleId;
+        div.innerHTML = `
+            <div class="rule-label">
+                <span>判定規則</span>
+                <span class="del-text" onclick="document.getElementById('${ruleId}').remove(); refreshLabels();">✕ 刪除</span>
+            </div>
+            <div class="conditions">
+                <label class="chip"><input type="checkbox" value="p_front"> 前方有路</label>
+                <label class="chip"><input type="checkbox" value="p_left"> 左方有路</label>
+                <label class="chip"><input type="checkbox" value="p_right"> 右方有路</label>
+                <label class="chip"><input type="checkbox" value="p_back"> 後方有路</label>
+            </div>
+            <div class="action-row">
+                執行動作：
+                <select class="act-val">
+                    <option value="forward">前進</option>
+                    <option value="turn_left">左轉並前進</option>
+                    <option value="turn_right">右轉並前進</option>
+                    <option value="mark">標記此處</option>
+                </select>
+            </div>
+        `;
+        list.appendChild(div);
+        refreshLabels();
+    }
+
+    function refreshLabels() {
+        const labels = document.querySelectorAll('#rules-list .rule-label span:first-child');
+        labels.forEach((s, i) => s.innerText = (i === 0 ? 'if (組合條件)' : 'else if (組合條件)'));
+    }
+
+    // 感測器系統
+    function checkPath(type) {
+        let checkDir = player.dir;
+        if(type === 'p_left') checkDir = (player.dir + 3) % 4;
+        if(type === 'p_right') checkDir = (player.dir + 1) % 4;
+        if(type === 'p_back') checkDir = (player.dir + 2) % 4;
+
+        let dr=0, dc=0;
+        if(checkDir === 0) dr = -1; else if(checkDir === 1) dc = 1;
+        else if(checkDir === 2) dr = 1; else if(checkDir === 3) dc = -1;
+
+        const nr = player.r + dr, nc = player.c + dc;
+        return (nr>=0 && nr<23 && nc>=0 && nc<33 && mazeMap[nr][nc] !== 1);
+    }
+
+    // 核心位移功能
+    function moveOneStep() {
+        let dr=0, dc=0;
+        if(player.dir === 0) dr = -1; else if(player.dir === 1) dc = 1;
+        else if(player.dir === 2) dr = 1; else if(player.dir === 3) dc = -1;
+        const nr = player.r + dr, nc = player.c + dc;
+        if(nr>=0 && nr<23 && nc>=0 && nc<33 && mazeMap[nr][nc] !== 1) {
+            player.r = nr; player.c = nc;
+            return true;
+        }
+        return false;
+    }
+
+    // 動作執行器 (包含轉向+前進邏輯)
+    function runAction(act) {
+        if(act === 'forward') {
+            moveOneStep();
+        } else if(act === 'turn_left') {
+            player.dir = (player.dir + 3) % 4;
+            moveOneStep(); // 轉完立刻走一步
+        } else if(act === 'turn_right') {
+            player.dir = (player.dir + 1) % 4;
+            moveOneStep(); // 轉完立刻走一步
+        } else if(act === 'turn_around') {
+            player.dir = (player.dir + 2) % 4;
+        } else if(act === 'mark') {
+            document.getElementById(`pos-${player.r}-${player.c}`).classList.add('marked');
+        }
+        updatePlayerUI();
+    }
+
+    function updatePlayerUI() {
+        document.querySelectorAll('#player').forEach(e => e.remove());
+        const target = document.getElementById(`pos-${player.r}-${player.c}`);
+        target.classList.add('visited');
+        const p = document.createElement('div');
+        p.id = 'player';
+        p.innerText = ['↑','→','↓','←'][player.dir];
+        target.appendChild(p);
+    }
+
+    // 自動執行迴圈
+    function startLoop() {
+        if(timer) return;
+        document.getElementById('status-bar').innerText = "正在執行邏輯迴圈...";
+        timer = setInterval(() => {
+            const rules = document.querySelectorAll('#rules-list .rule-card');
+            let hasTriggered = false;
+
+            for(let rule of rules) {
+                const checked = Array.from(rule.querySelectorAll('input:checked')).map(i => i.value);
+                // 邏輯 AND：所有勾選條件必須同時成立
+                if(checked.length > 0 && checked.every(cond => checkPath(cond))) {
+                    runAction(rule.querySelector('.act-val').value);
+                    hasTriggered = true;
+                    break;
+                }
+            }
+
+            if(!hasTriggered) {
+                runAction(document.getElementById('else-action').value);
+            }
+
+            if(mazeMap[player.r][player.c] === 'E') {
+                clearInterval(timer);
+                timer = null;
+                document.getElementById('status-bar').innerText = "目標達成！機器人成功解出迷宮。";
+            }
+        }, 150);
+    }
+
+    function stopLoop() { clearInterval(timer); timer = null; document.getElementById('status-bar').innerText = "已停止。"; }
+    function resetAll() { stopLoop(); player = { r: 1, c: 1, dir: 1 }; init(); }
+
+    // 預設規則建議
+    addRule(); // 生成預設 if
+    init();
+</script>
+</body>
+</html>
